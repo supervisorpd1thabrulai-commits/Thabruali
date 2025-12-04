@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Controle de Produção</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e3c72;
+            --secondary: #2a5298;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --bg: #f8fafc;
+            --white: #ffffff;
+            --border: #e2e8f0;
+            --text: #334155;
+            --gray: #64748b;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            padding: 10px;
+            line-height: 1.5;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        /* HEADER */
+        .header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .header h1 {
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .controls select,
+        .btn {
+            padding: 10px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            min-width: 100px;
+        }
+        .btn-config { background: rgba(255,255,255,0.2); color: white; }
+        .btn-config:hover { background: rgba(255,255,255,0.3); }
+
+        /* CONTENT */
+        .content {
+            padding: 16px;
+            flex: 1;
+        }
+
+        /* TABS */
+        .shift-tabs {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 14px;
+            background: #eef2f6;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            color: var(--gray);
+            text-align: left;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background: var(--secondary);
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.4s;
+        }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* CHECKLIST */
+        .checklist-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+        .checklist-table th {
+            background: #f1f5f9;
+            color: var(--gray);
+            padding: 12px 8px;
+            text-align: left;
+            font-size: 0.85rem;
+            border-bottom: 2px solid var(--border);
+        }
+        .checklist-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        .day-column {
+            width: 50px;
+            text-align: center;
+            font-weight: bold;
+            color: var(--secondary);
+            background: #f8fafc;
+            font-size: 1rem;
+        }
+        .task-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        .task-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            padding: 6px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .task-item:hover { background: #f8fafc; }
+        .task-checkbox {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            accent-color: var(--secondary);
+            cursor: pointer;
+        }
+        .task-label {
+            cursor: pointer;
+            user-select: none;
+            flex: 1;
+        }
+        .progress-container {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0;
+            background: var(--warning);
+            transition: width 0.4s ease;
+        }
+        .progress-text {
+            font-size: 0.75rem;
+            color: var(--gray);
+            font-weight: 600;
+            margin-top: 4px;
+            display: block;
+        }
+
+        /* SUPERVISOR INPUT */
+        .supervisor-input {
+            margin: 12px 0;
+            font-weight: 600;
+        }
+        .supervisor-input input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-top: 6px;
+        }
+
+        /* DASHBOARD TOGGLE (MOBILE) */
+        .dashboard-toggle {
+            display: none;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-bottom: 16px;
+            width: 100%;
+            font-weight: 600;
+        }
+        .dashboard-toggle i { margin-right: 8px; }
+
+        /* STATS PANEL */
+        .stats-panel {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            display: none;
+        }
+        .stats-panel.open { display: block; }
+        .stats-panel h3 {
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 1.1rem;
+            text-align: center;
+        }
+        .chart-container {
+            position: relative;
+            height: 180px;
+            margin-bottom: 16px;
+        }
+        .stat-box {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--primary);
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--gray);
+        }
+
+        /* ACTIONS BAR */
+        .actions-bar {
+            padding: 16px;
+            background: #f8fafc;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .btn {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            transition: transform 0.2s;
+        }
+        .btn-excel { background: #107c41; color: white; }
+        .btn-excel:hover { background: #0b5c30; transform: translateY(-2px); }
+        .btn-print { background: #1e40af; color: white; }
+        .btn-print:hover { background: #1e3a8a; transform: translateY(-2px); }
+        .btn-clear {
+            background: white;
+            border: 1px solid #cbd5e1;
+            color: #ef4444;
+        }
+        .btn-clear:hover { background: #fee2e2; }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+        }
+        .modal input, .modal textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 1rem;
+        }
+        .close-modal {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 1.8rem;
+            cursor: pointer;
+            color: #999;
+        }
+
+        /* CONFETTI */
+        .confetti-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        /* RESPONSIVIDADE */
+        @media (min-width: 768px) {
+            .shift-tabs {
+                flex-direction: row;
+                border-bottom: 2px solid var(--border);
+            }
+            .tab {
+                border-radius: 10px 10px 0 0;
+                padding: 12px 20px;
+            }
+            .dashboard-toggle { display: none; }
+            .stats-panel { display: block; margin-top: 0; }
+            .content {
+                display: grid;
+                grid-template-columns: 1fr 300px;
+                gap: 20px;
+            }
+            .main-area { min-width: 0; }
+            .stats-panel-container {
+                position: sticky;
+                top: 20px;
+                align-self: start;
+            }
+            .actions-bar {
+                flex-direction: row;
+                justify-content: flex-end;
+            }
+            .btn { min-width: 180px; }
+        }
+        @media (max-width: 480px) {
+            .header h1 { font-size: 1.1rem; }
+            .controls select { font-size: 0.85rem; min-width: 90px; }
+            .btn { font-size: 0.9rem; }
+        }
+
+        /* PRINT STYLES */
+        @media print {
+            @page {
+                margin: 10mm;
+                size: landscape;
+            }
+            body, html {
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: none;
+            }
+            .header, .controls, .actions-bar, .dashboard-toggle, .stats-panel, .modal, .confetti-overlay {
+                display: none !important;
+            }
+            .content {
+                padding: 0 !important;
+                display: block !important;
+            }
+            .shift-tabs, .tab-content {
+                display: block !important;
+            }
+            .tab {
+                display: none !important;
+            }
+            .tab-content {
+                display: block !important;
+                page-break-after: always;
+                margin-bottom: 20mm;
+            }
+            .checklist-wrapper {
+                overflow: visible !important;
+                border: 1px solid #000;
+            }
+            .checklist-table {
+                font-size: 10pt;
+            }
+            .supervisor-input {
+                font-weight: bold;
+                margin-bottom: 10px;
+                border-bottom: 1px solid #000;
+                padding-bottom: 5px;
+            }
+            .progress-container, .progress-text {
+                display: none !important;
+            }
+            .task-item {
+                font-size: 9pt;
+            }
+            .print-header {
+                display: block !important;
+                text-align: center;
+                margin-bottom: 15mm;
+                font-size: 14pt;
+            }
+            .print-header h2 {
+                margin: 0;
+                font-size: 18pt;
+            }
+            .print-header p {
+                margin: 5px 0;
+                font-size: 12pt;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <h1><i class="fas fa-tasks"></i> Controle de Produção</h1>
+        <div class="controls">
+            <select id="monthSelect" onchange="render()"></select>
+            <select id="yearSelect" onchange="render()">
+                <option value="2024">2024</option>
+                <option value="2025" selected>2025</option>
+            </select>
+            <button class="btn btn-config" onclick="openConfig()" aria-label="Configurações">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="content">
+        <div class="main-area">
+            <button class="dashboard-toggle" onclick="toggleDashboard()">
+                <i class="fas fa-chart-pie"></i> Ver Performance
+            </button>
+
+            <div class="shift-tabs">
+                <button class="tab active" onclick="switchTab('shift1')" aria-controls="shift1">1º Turno (05:10 - 13:30)</button>
+                <button class="tab" onclick="switchTab('shift2')" aria-controls="shift2">2º Turno (13:30 - 21:50)</button>
+                <button class="tab" onclick="switchTab('shift3')" aria-controls="shift3">3º Turno (21:50 - 05:10)</button>
+            </div>
+
+            <!-- Turno 1 -->
+            <div id="shift1" class="tab-content active">
+                <div class="supervisor-input">
+                    <div>Supervisor:</div>
+                    <input type="text" id="sup-shift1" placeholder="Nome..." onblur="saveData()" aria-label="Supervisor 1º Turno">
+                </div>
+                <div class="checklist-wrapper">
+                    <table class="checklist-table" role="grid">
+                        <tbody id="tbody-shift1"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Turno 2 -->
+            <div id="shift2" class="tab-content">
+                <div class="supervisor-input">
+                    <div>Supervisor:</div>
+                    <input type="text" id="sup-shift2" placeholder="Nome..." onblur="saveData()" aria-label="Supervisor 2º Turno">
+                </div>
+                <div class="checklist-wrapper">
+                    <table class="checklist-table" role="grid">
+                        <tbody id="tbody-shift2"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Turno 3 -->
+            <div id="shift3" class="tab-content">
+                <div class="supervisor-input">
+                    <div>Supervisor:</div>
+                    <input type="text" id="sup-shift3" placeholder="Nome..." onblur="saveData()" aria-label="Supervisor 3º Turno">
+                </div>
+                <div class="checklist-wrapper">
+                    <table class="checklist-table" role="grid">
+                        <tbody id="tbody-shift3"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-panel-container">
+            <div class="stats-panel" id="statsPanel">
+                <h3>Performance do Mês</h3>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="total-percent">0%</div>
+                    <div class="stat-label">Conclusão Geral</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="actions-bar">
+        <button class="btn btn-clear" onclick="clearData()">
+            <i class="fas fa-trash"></i> Limpar Tudo
+        </button>
+        <button class="btn btn-excel" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i> Exportar Excel
+        </button>
+        <button class="btn btn-print" onclick="printReport()">
+            <i class="fas fa-print"></i> Imprimir Relatório
+        </button>
+    </div>
+</div>
+
+<!-- Cabeçalho de Impressão (oculto na tela) -->
+<div class="print-header" style="display:none;">
+    <h2>Relatório de Controle de Produção</h2>
+    <p id="print-period"></p>
+    <p id="print-supervisors"></p>
+</div>
+
+<!-- Modal Config -->
+<div id="configModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <h3>Configurar Tarefas</h3>
+        <p>Senha de Administrador:</p>
+        <input type="password" id="adminPass" placeholder="Digite a senha...">
+        <button class="btn btn-config" onclick="checkPass()" style="width:100%; margin-top:10px;">Entrar</button>
+        <div id="editArea" style="display:none; margin-top:20px;">
+            <p>Edite as tarefas (uma por linha):</p>
+            <textarea id="tasksInput" rows="8"></textarea>
+            <button class="btn btn-excel" onclick="saveTasks()" style="width:100%; margin-top:10px;">Salvar</button>
+        </div>
+    </div>
+</div>
+
+<div id="confettiOverlay" class="confetti-overlay"></div>
+
+<script>
+    const DB_KEY = 'prod_control_mobile';
+    let chartInstance = null;
+    let appState = {
+        tasks: ["Verificação Segurança", "Limpeza 5S", "Checagem Matéria-Prima", "Setup de Máquina", "Relatório Final"],
+        data: {}
+    };
+
+    window.onload = () => {
+        populateMonths();
+        loadData();
+        render();
+    };
+
+    function populateMonths() {
+        const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const sel = document.getElementById('monthSelect');
+        const now = new Date();
+        months.forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.textContent = m;
+            if (i === now.getMonth()) opt.selected = true;
+            sel.appendChild(opt);
+        });
+        document.getElementById('yearSelect').value = now.getFullYear();
+    }
+
+    function render() {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('yearSelect').value;
+        const days = new Date(year, +month + 1, 0).getDate();
+        ['shift1', 'shift2', 'shift3'].forEach(shift => {
+            renderTable(shift, days, month, year);
+            const sup = appState.data[`sup-${shift}-${month}-${year}`] || '';
+            document.getElementById(`sup-${shift}`).value = sup;
+        });
+        updateCharts(days, month, year);
+    }
+
+    function renderTable(shift, days, month, year) {
+        const tbody = document.getElementById(`tbody-${shift}`);
+        tbody.innerHTML = '';
+        for (let d = 1; d <= days; d++) {
+            const tr = document.createElement('tr');
+            const tdDay = Object.assign(document.createElement('td'), { className: 'day-column', textContent: d });
+            tr.appendChild(tdDay);
+            const tdTasks = document.createElement('td');
+            const grid = Object.assign(document.createElement('div'), { className: 'task-grid' });
+            let checked = 0;
+
+            appState.tasks.forEach((task, i) => {
+                const key = `${year}-${month}-${shift}-${d}-${i}`;
+                const isChecked = appState.data[key] === true;
+                if (isChecked) checked++;
+
+                const item = document.createElement('div');
+                item.className = 'task-item';
+                item.innerHTML = `
+                    <input type="checkbox" class="task-checkbox" id="${key}" ${isChecked?'checked':''}
+                           onchange="toggleCheck('${key}', ${d}, '${shift}')">
+                    <label class="task-label" for="${key}">${task}</label>
+                `;
+                grid.appendChild(item);
+            });
+
+            const pct = Math.round((checked / appState.tasks.length) * 100);
+            const color = pct === 100 ? 'var(--success)' : pct > 0 ? 'var(--warning)' : '#cbd5e1';
+            tdTasks.appendChild(grid);
+            tdTasks.innerHTML += `
+                <div class="progress-container">
+                    <div class="progress-bar" style="width:${pct}%;background:${color}"></div>
+                </div>
+                <span class="progress-text">${pct}% Concluído</span>
+            `;
+            tr.appendChild(tdTasks);
+            tbody.appendChild(tr);
+        }
+    }
+
+    function toggleCheck(key, day, shift) {
+        const el = document.getElementById(key);
+        appState.data[key] = el.checked;
+        saveData();
+        render();
+        if (el.checked) checkCompletion(day, shift);
+    }
+
+    function checkCompletion(day, shift) {
+        const month = document.getElementById('monthSelect').value;
+        const year = document.getElementById('yearSelect').value;
+        const total = appState.tasks.length;
+        let done = 0;
+        for (let i = 0; i < total; i++) {
+            if (appState.data[`${year}-${month}-${shift}-${day}-${i}`]) done++;
+        }
+        if (done === total) triggerConfetti();
+    }
+
+    function triggerConfetti() {
+        const overlay = document.getElementById('confettiOverlay');
+        overlay.style.display = 'block';
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        setTimeout(() => overlay.style.display = 'none', 3000);
+    }
+
+    function saveData() {
+        const m = document.getElementById('monthSelect').value;
+        const y = document.getElementById('yearSelect').value;
+        ['shift1','shift2','shift3'].forEach(s => {
+            appState.data[`sup-${s}-${m}-${y}`] = document.getElementById(`sup-${s}`).value.trim();
+        });
+        localStorage.setItem(DB_KEY, JSON.stringify(appState));
+    }
+
+    function loadData() {
+        const saved = localStorage.getItem(DB_KEY);
+        if (saved) {
+            try {
+                appState = { ...appState, ...JSON.parse(saved) };
+            } catch (e) {
+                console.error("Erro ao carregar dados salvos.");
+            }
+        }
+    }
+
+    function clearData() {
+        if (confirm('Tem certeza? Todos os dados serão apagados permanentemente.')) {
+            localStorage.removeItem(DB_KEY);
+            location.reload();
+        }
+    }
+
+    function updateCharts(days, month, year) {
+        const totalPerShift = days * appState.tasks.length;
+        const totals = ['shift1','shift2','shift3'].map(shift => {
+            let count = 0;
+            for (let d=1; d<=days; d++) for (let t=0; t<appState.tasks.length; t++)
+                if (appState.data[`${year}-${month}-${shift}-${d}-${t}`]) count++;
+            return Math.round((count / totalPerShift) * 100) || 0;
+        });
+        const avg = Math.round(totals.reduce((a,b)=>a+b)/3);
+        const el = document.getElementById('total-percent');
+        el.textContent = avg + '%';
+        el.style.color = avg === 100 ? 'var(--success)' : 'var(--primary)';
+
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Turno 1', 'Turno 2', 'Turno 3'],
+                datasets: [{ data: totals, backgroundColor: ['#1e3c72','#2a5298','#64748b'], borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+            }
+        });
+    }
+
+    function exportToExcel() {
+        const wb = XLSX.utils.book_new();
+        const monthEl = document.getElementById('monthSelect');
+        const monthTxt = monthEl.options[monthEl.selectedIndex].text;
+        const year = document.getElementById('yearSelect').value;
+        const month = monthEl.value;
+        const days = new Date(year, +month + 1, 0).getDate();
+        const perShift = ['shift1','shift2','shift3'].map((s,i) => {
+            let count = 0;
+            for (let d=1; d<=days; d++) for (let t=0; t<appState.tasks.length; t++)
+                if (appState.data[`${year}-${month}-${s}-${d}-${t}`]) count++;
+            return Math.round((count / (days * appState.tasks.length)) * 100) || 0;
+        });
+        const summary = [
+            ["Relatório de Produção", ""], ["Período:", `${monthTxt}/${year}`], [""],
+            ["Turno", "Performance (%)"], ["1º Turno", perShift[0]+"%"], ["2º Turno", perShift[1]+"%"],
+            ["3º Turno", perShift[2]+"%"], ["Média", Math.round(perShift.reduce((a,b)=>a+b)/3)+"%"]
+        ];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Resumo");
+
+        ['shift1','shift2','shift3'].forEach((s, i) => {
+            const name = `${i+1}º Turno`;
+            const sup = document.getElementById(`sup-${s}`).value || "Não informado";
+            const data = [[`Relatório - ${name}`], [`Supervisor: ${sup}`], ["Dia", ...appState.tasks, "%"]];
+            for (let d=1; d<=days; d++) {
+                const row = [d];
+                let done = 0;
+                appState.tasks.forEach((_, t) => {
+                    const ok = appState.data[`${year}-${month}-${s}-${d}-${t}`] ? "OK" : "-";
+                    row.push(ok); if (ok==="OK") done++;
+                });
+                row.push(Math.round((done/appState.tasks.length)*100)+"%");
+                data.push(row);
+            }
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), name);
+        });
+        XLSX.writeFile(wb, `Producao_${monthTxt}_${year}.xlsx`);
+    }
+
+    function switchTab(id) {
+        document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const index = id === 'shift1' ? 0 : id === 'shift2' ? 1 : 2;
+        document.querySelectorAll('.tab')[index].classList.add('active');
+        document.getElementById(id).classList.add('active');
+    }
+
+    function toggleDashboard() {
+        const panel = document.getElementById('statsPanel');
+        const btn = document.querySelector('.dashboard-toggle');
+        panel.classList.toggle('open');
+        btn.innerHTML = panel.classList.contains('open')
+            ? '<i class="fas fa-chart-pie"></i> Ocultar Performance'
+            : '<i class="fas fa-chart-pie"></i> Ver Performance';
+    }
+
+    function openConfig() { document.getElementById('configModal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('configModal').style.display = 'none'; }
+
+    function checkPass() {
+        if (document.getElementById('adminPass').value === '135299') {
+            document.getElementById('editArea').style.display = 'block';
+            document.getElementById('tasksInput').value = appState.tasks.join('\n');
+        } else {
+            alert('Senha incorreta');
+        }
+    }
+
+    function saveTasks() {
+        const lines = document.getElementById('tasksInput').value.split('\n').map(l => l.trim()).filter(l => l);
+        if (lines.length > 0) {
+            appState.tasks = lines;
+            saveData();
+            closeModal();
+            render();
+        } else {
+            alert("Adicione pelo menos uma tarefa.");
+        }
+    }
+
+    // NOVA FUNÇÃO: IMPRIMIR RELATÓRIO
+    function printReport() {
+        const monthEl = document.getElementById('monthSelect');
+        const monthTxt = monthEl.options[monthEl.selectedIndex].text;
+        const year = document.getElementById('yearSelect').value;
+
+        // Atualiza cabeçalho de impressão
+        document.getElementById('print-period').textContent = `Período: ${monthTxt} / ${year}`;
+        const sup1 = document.getElementById('sup-shift1').value || "Não informado";
+        const sup2 = document.getElementById('sup-shift2').value || "Não informado";
+        const sup3 = document.getElementById('sup-shift3').value || "Não informado";
+        document.getElementById('print-supervisors').innerHTML = `
+            <strong>1º Turno:</strong> ${sup1} &nbsp; | &nbsp;
+            <strong>2º Turno:</strong> ${sup2} &nbsp; | &nbsp;
+            <strong>3º Turno:</strong> ${sup3}
+        `;
+
+        window.print();
+    }
+</script>
+</body>
+</html>
